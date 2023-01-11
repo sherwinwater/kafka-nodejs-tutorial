@@ -2,15 +2,18 @@
   "name": "kafka",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "src/app.ts",
   "dependencies": {
     "jsonfile": "^6.0.0",
     "kafkajs": "^1.12.0"
   },
   "devDependencies": {
+    "@types/node": "^18.11.18",
     "file-loader": "^5.1.0",
     "jest": "^25.1.0",
-    "kafka-node": "^5.0.0",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^4.9.4",
     "webpack": "^4.41.6",
     "webpack-cli": "^3.3.11"
   },
@@ -18,7 +21,9 @@
     "consumer": "node ./src/consumer.js",
     "producer": "node ./src/producer.js",
     "build": "webpack --config webpack.config.js --progress",
-    "test": "jest"
+    "test": "jest",
+    "tsc":"tsc",
+    "dev": "npx ts-node src/app.ts"
   },
   "keywords": [],
   "author": "",

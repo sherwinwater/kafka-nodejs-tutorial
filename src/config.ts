@@ -1,4 +1,4 @@
-module.exports = {
+export const config = {
   kafka: {
     TOPIC: 'test',
     BROKERS: ['localhost:9092'],
