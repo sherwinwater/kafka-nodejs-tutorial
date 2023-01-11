@@ -62,18 +62,7 @@ export default class ConsumerFactory {
           const { batch } = eachBatchPayload
           for (const message of batch.messages) {
             const prefix = `${batch.topic}[${batch.partition} | ${message.offset}] / ${message.timestamp}`
-            // if(message.value.bodyTemperature > 37){
-
-            // }
             console.log(`consumer- ${prefix} ${message.key}#${message.value}`)
-            console.log('---prefix---')
-            console.log('prefix', prefix)
-            console.log('---k---')
-            console.log('---message.key---', message.key)
-            console.log('---k---')
-            console.log('---v---')
-            console.log('message.value', message.value)
-            console.log('---v---')
           }
         }
       })
