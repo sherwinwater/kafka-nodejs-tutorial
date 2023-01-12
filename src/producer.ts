@@ -6,32 +6,35 @@ import {
   Producer,
   ProducerBatch,
   TopicMessages,
-  ProducerRecord
+  ProducerRecord,
+  KafkaConfig
 } from 'kafkajs'
 
 interface CustomMessageFormat {
   a: string
 }
 
-export type KafkaType = {
-  brokers: string[]
-  clientId: string
-  groupId?: string
+export interface MessageProducer {
+  connect(): Promise<void>
+  handle(message: any): Promise<void>
+  disconnect(): Promise<void>
 }
-
-export default class ProducerFactory {
+export default class KafkaProducer implements MessageProducer {
   private producer: Producer
+  private config: KafkaConfig
 
-  constructor (args: KafkaType) {
+  constructor (args: KafkaConfig) {
+    this.config = args
+
     const kafka = new Kafka({
-      clientId: args.clientId,
-      brokers: args.brokers
+      clientId: this.config.clientId,
+      brokers: this.config.brokers
     })
 
     this.producer = kafka.producer()
   }
 
-  public async start (): Promise<void> {
+  public async connect (): Promise<void> {
     try {
       await this.producer.connect()
     } catch (error) {
@@ -39,15 +42,17 @@ export default class ProducerFactory {
     }
   }
 
-  public async shutdown (): Promise<void> {
-    await this.producer.disconnect()
+  public async handle (message: ProducerRecord): Promise<void> {
+    try {
+      await this.producer.send(message)
+    } catch (error) {
+      console.log('Error producing message: ', error)
+    }
   }
 
-  public async sendMessage (message: ProducerRecord): Promise<void> {
-    await this.producer.send(message)
-  }
-
-  public async sendBatch (messages: Array<CustomMessageFormat>): Promise<void> {
+  public async handleBatch (
+    messages: Array<CustomMessageFormat>
+  ): Promise<void> {
     const kafkaMessages: Array<Message> = messages.map(message => {
       return {
         value: JSON.stringify(message)
@@ -63,6 +68,18 @@ export default class ProducerFactory {
       topicMessages: [topicMessages]
     }
 
-    await this.producer.sendBatch(batch)
+    try {
+      await this.producer.sendBatch(batch)
+    } catch (error) {
+      console.log('Error producing batch message: ', error)
+    }
+  }
+
+  public async disconnect (): Promise<void> {
+    try {
+      await this.producer.disconnect()
+    } catch (error) {
+      console.log('Error on disconnecting producer: ', error)
+    }
   }
 }

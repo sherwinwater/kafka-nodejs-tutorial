@@ -3,75 +3,108 @@ import {
   ConsumerSubscribeTopic,
   EachBatchPayload,
   Kafka,
-  EachMessagePayload
+  EachMessagePayload,
+  KafkaConfig,
+  KafkaMessage
 } from 'kafkajs'
-import { config } from './config'
-import { KafkaType } from './producer'
 
-export default class ConsumerFactory {
-  private kafkaConsumer: Consumer
+export interface MessageConsumer {
+  connect(): Promise<void>
+  handle(message: any): Promise<void>
+  disconnect(): Promise<void>
+}
 
-  public constructor (args: KafkaType) {
+export default class KafkaConsumer implements MessageConsumer {
+  private consumer: Consumer
+  private config: KafkaConfig & { groupId: string; topic: string }
+
+  constructor (args: KafkaConfig & { groupId: string; topic: string }) {
+    this.config = args
+
     const kafka = new Kafka({
-      clientId: args.clientId,
-      brokers: args.brokers
+      clientId: this.config.clientId,
+      brokers: this.config.brokers
     })
-    this.kafkaConsumer = kafka.consumer({ groupId: args.groupId! })
+    this.consumer = kafka.consumer({ groupId: this.config.groupId })
   }
 
-  public async start (): Promise<void> {
+  async connect (): Promise<void> {
     const topic: ConsumerSubscribeTopic = {
-      topic: config.kafka.TOPIC,
+      topic: this.config.topic,
       fromBeginning: false
     }
 
     try {
-      await this.kafkaConsumer.connect()
-      await this.kafkaConsumer.subscribe(topic)
-
-      await this.kafkaConsumer.run({
-        eachMessage: async (messagePayload: EachMessagePayload) => {
-
-          const { topic, partition, message } = messagePayload
-          const prefix = `${topic}[${partition} | ${message.offset}] / ${message.timestamp}`
-          console.log(`consumer- ${prefix} ${message.key}#${message.value}`)
-
-          const jsonObj = JSON.parse(message.value.toString())
-
-          if(jsonObj.bodyTemperature >37){
-            console.log("---alert", jsonObj)
-          }
-
-        }
-      })
+      await this.consumer.connect()
+      await this.consumer.subscribe(topic)
     } catch (error) {
-      console.log('Error: ', error)
+      console.log('Error on connecting consumer ', error)
     }
   }
 
-  public async startBatchConsumer (): Promise<void> {
-    const topic: ConsumerSubscribeTopic = {
-      topic: config.kafka.TOPIC,
-      fromBeginning: false
-    }
+  async startConsumer (): Promise<void> {
     try {
-      await this.kafkaConsumer.connect()
-      await this.kafkaConsumer.subscribe(topic)
-      await this.kafkaConsumer.run({
-        eachBatch: async (eachBatchPayload: EachBatchPayload) => {
-          const { batch } = eachBatchPayload
-          for (const message of batch.messages) {
-            const prefix = `${batch.topic}[${batch.partition} | ${message.offset}] / ${message.timestamp}`
-            console.log(`consumer- ${prefix} ${message.key}#${message.value}`)
-          }
-        }
+      await this.consumer.run({
+        eachMessage: payload => this.handle(payload)
       })
     } catch (error) {
-      console.log('Error: ', error)
+      console.log('Error on startConsumer ', error)
     }
   }
 
-  public async shutdown (): Promise<void> {
-    await this.kafkaConsumer.disconnect()
+  async startBatchConsumer (): Promise<void> {
+    try {
+      await this.consumer.run({
+        eachBatch: payload => this.handleBatch(payload)
+      })
+    } catch (error) {
+      console.log('Error on startBatchConsumer ', error)
+    }
+  }
+
+  async handle ({
+    topic,
+    partition,
+    message
+  }: EachMessagePayload): Promise<void> {
+    try {
+      const prefix = `${topic}[${partition} | ${message.offset}] / ${message.timestamp}`
+      console.log(`consumer- ${prefix} ${message.key}#${message.value}`)
+
+      const jsonObj = JSON.parse(message.value.toString())
+
+      if (jsonObj.bodyTemperature > 37) {
+        console.log('---alert', jsonObj)
+        console.log('-------')
+        this.logMessageHandler(message)
+      }
+    } catch (error) {
+      console.log('Error on consuming message ', error)
+    }
+  }
+
+  async handleBatch ({ batch }: EachBatchPayload): Promise<void> {
+    try {
+      for (const message of batch.messages) {
+        const prefix = `${batch.topic}[${batch.partition} | ${message.offset}] / ${message.timestamp}`
+        console.log(`consumer- ${prefix} ${message.key}#${message.value}`)
+      }
+    } catch (error) {
+      console.log('Error on consuming batch message ', error)
+    }
+  }
+
+  logMessageHandler (message: KafkaMessage) {
+    console.log({
+      value: message.value?.toString()
+    })
+  }
+
+  async disconnect (): Promise<void> {
+    try {
+      await this.consumer.disconnect()
+    } catch (error) {
+      console.log('Error on disconnecting consumer ', error)
+    }
   }
 }
